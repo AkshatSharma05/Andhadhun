@@ -14,7 +14,7 @@ import random
 import math
 import sys
 from openal.al import alSourcei, AL_TRUE, AL_SOURCE_RELATIVE
-from std_msgs.msg import Float32
+from std_msgs.msg import Float32, Int32
 
 pygame.mixer.init()
 breathing_sound = pygame.mixer.Sound("breathing.wav")
@@ -215,10 +215,10 @@ def pygame_thread_fn():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    shoot_sound.play()
-                    shoot(player_angle)
+            # elif event.type == pygame.KEYDOWN:
+            #     if event.key == pygame.K_SPACE:
+            #         shoot_sound.play()
+            #         shoot(player_angle)
 
         keys = pygame.key.get_pressed()
         # if keys[pygame.K_LEFT]:
@@ -242,9 +242,21 @@ class ImuSubscriber(Node):
             10
         )
 
+        self.switch_subscription = self.create_subscription(
+            Int32,               # Change this to Int32 if needed
+            '/limit_switch',
+            self.switch_callback,
+            10
+        )
+
     def listener_callback(self, msg):
         global player_angle
         player_angle = msg.data
+
+    def switch_callback(self, msg):
+         if msg.data == 0:
+            shoot_sound.play()
+            shoot(player_angle)
 
 # --- Main Execution ---
 def main(args=None):
