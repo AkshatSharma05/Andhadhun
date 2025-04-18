@@ -124,119 +124,27 @@ def draw_quadrants(screen):
     pygame.draw.line(screen, (100, 100, 100), (0, HEIGHT//2), (WIDTH, HEIGHT//2), 2)
 
 def draw_player(screen, angle):
-    # The player angle should be synchronized with the cone's double rotation angle
-    # Double the player's angle as well to match the cone's 720° rotation per unit of distance
-    player_angle = angle * 2  # Align player's angle with the shooting cone's angle
-
-    # Ensure angle is within 0-360 degrees
-    player_angle = player_angle % 360
-
-    # Convert player angle to radians for drawing
-    rad = math.radians(player_angle)
-    
-    # Calculate player's tip and side points for triangle shape
+    rad = math.radians(angle)
     tip = (CENTER[0] + PLAYER_SIZE * math.cos(rad), CENTER[1] - PLAYER_SIZE * math.sin(rad))
     left = (CENTER[0] + PLAYER_SIZE * math.cos(rad + 2.5), CENTER[1] - PLAYER_SIZE * math.sin(rad + 2.5))
     right = (CENTER[0] + PLAYER_SIZE * math.cos(rad - 2.5), CENTER[1] - PLAYER_SIZE * math.sin(rad - 2.5))
-    
-    # Draw player (triangle shape pointing in the direction of the angle)
     pygame.draw.polygon(screen, (0, 255, 0), [tip, left, right])
-
-def draw_shooting_cone(screen, angle):
-    # Ensure angle is within 0-360 degrees
-    angle = angle % 360  # This will wrap around the angle into the 0-360 range
-    
-    # Double the speed of rotation (i.e., two full rotations for every unit of distance)
-    double_rotation_angle = angle * 2  # Cover two full rotations per unit
-    
-    # The start and end of the shooting cone based on the player's angle
-    start_angle = (double_rotation_angle - SHOT_ANGLE_RANGE) % 360  # Wrap the start angle
-    end_angle = (double_rotation_angle + SHOT_ANGLE_RANGE) % 360  # Wrap the end angle
-
-    # Radius of the shooting guide lines
-    radius = 300  # Length of the shooting guide lines
-
-    # Draw the lines for the shooting cone
-    for a in [start_angle, end_angle]:
-        # Convert the angle to radians
-        rad = math.radians(a)
-        
-        # Calculate end coordinates for the shooting cone line
-        end_x = CENTER[0] + radius * math.cos(rad)
-        end_y = CENTER[1] - radius * math.sin(rad)
-        
-        # Invert y-axis for Pygame
-        pygame.draw.line(screen, (255, 255, 0), CENTER, (end_x, end_y), 2)
-
-def pygame_thread_fn():
-    global player_angle, running, last_spawn_time
-
-    pygame.init()
-    breathing_sound.play(-1)  # -1 means loop indefinitely
-
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("IMU Visualization & Enemy Quadrants")
-    clock = pygame.time.Clock()
-    font = pygame.font.SysFont(None, 36)
-
-    while running:
-        screen.fill((0, 0, 0))
-        draw_quadrants(screen)
-        draw_shooting_cone(screen, player_angle)
-        draw_player(screen, player_angle)  # Sync player with cone
-        draw_spawn_circle(screen)
-        update_enemies()
-        draw_enemies(screen)
-        display_imu_data(screen, player_angle, PLAYER_HEALTH, font)
-
-        current_time = pygame.time.get_ticks()
-        if current_time - last_spawn_time >= ENEMY_SPAWN_INTERVAL:
-            spawn_enemy()
-            last_spawn_time = current_time
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    shoot_sound.play()
-                    shoot(player_angle)
-
-        pygame.display.flip()
-        clock.tick(FPS)
-
-    pygame.quit()
-
 
 def draw_enemies(screen):
     for enemy in enemies:
         pygame.draw.rect(screen, (255, 0, 0), pygame.Rect(enemy['x'] - ENEMY_SIZE//2, enemy['y'] - ENEMY_SIZE//2, ENEMY_SIZE, ENEMY_SIZE))
-def draw_shooting_cone(screen, angle):
-    # Ensure angle is within 0-360 degrees
-    angle = angle % 360  # This will wrap around the angle into the 0-360 range
-    
-    # Double the speed of rotation (i.e., two full rotations for every unit of distance)
-    # This effectively means each movement will result in two full rotations (720°)
-    double_rotation_angle = angle * 2  # Cover two full rotations per unit
-    
-    # The start and end of the shooting cone based on the player's angle
-    start_angle = (double_rotation_angle - SHOT_ANGLE_RANGE) % 360  # Wrap the start angle
-    end_angle = (double_rotation_angle + SHOT_ANGLE_RANGE) % 360  # Wrap the end angle
 
-    # Radius of the shooting guide lines
+def draw_shooting_cone(screen, angle):
+    start_angle = angle - SHOT_ANGLE_RANGE
+    end_angle = angle + SHOT_ANGLE_RANGE
     radius = 300  # Length of the shooting guide lines
 
-    # Draw the lines for the shooting cone
     for a in [start_angle, end_angle]:
-        # Convert the angle to radians
         rad = math.radians(a)
-        
-        # Calculate end coordinates for the shooting cone line
         end_x = CENTER[0] + radius * math.cos(rad)
         end_y = CENTER[1] - radius * math.sin(rad)
-        
-        # Invert y-axis for Pygame
         pygame.draw.line(screen, (255, 255, 0), CENTER, (end_x, end_y), 2)
+
 
 def display_imu_data(screen, angle, PLAYER_HEALTH, font):
     text = font.render(f"IMU Angle: {angle:.2f}°", True, (255, 255, 255))
@@ -376,3 +284,4 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+
