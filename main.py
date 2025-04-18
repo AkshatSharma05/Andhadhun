@@ -48,12 +48,12 @@ FPS = 60
 def on_press(key):
     global player_angle, running
     try:
-        # if key == keyboard.Key.left:
-        #     player_angle = (player_angle - 5) % 360
-        # elif key == keyboard.Key.right:
-        #     player_angle = (player_angle + 5) % 360
-        # elif key == keyboard.Key.esc:
-        #     running = False
+        if key == keyboard.Key.left:
+            player_angle = (player_angle - 5) % 360
+        elif key == keyboard.Key.right:
+            player_angle = (player_angle + 5) % 360
+        elif key == keyboard.Key.esc:
+            running = False
         pass
     except:
         pass
@@ -187,7 +187,7 @@ def shoot(angle):
 
 # --- Pygame Thread ---
 def pygame_thread_fn():
-    global player_angle, running, last_spawn_time
+    global player_angle, running, last_spawn_time, PLAYER_HEALTH
 
     pygame.init()
     breathing_sound.play(-1)  # -1 means loop indefinitely
@@ -196,25 +196,41 @@ def pygame_thread_fn():
     pygame.display.set_caption("IMU Visualization & Enemy Quadrants")
     clock = pygame.time.Clock()
     font = pygame.font.SysFont(None, 36)
+    game_over_font = pygame.font.SysFont(None, 72)
+
+    game_over = False
 
     while running:
         screen.fill((0, 0, 0))
-        draw_quadrants(screen)
-        draw_shooting_cone(screen, player_angle)
-        draw_player(screen, player_angle)
-        draw_spawn_circle(screen)
-        update_enemies()
-        draw_enemies(screen)
-        display_imu_data(screen, player_angle, PLAYER_HEALTH, font)
 
-        current_time = pygame.time.get_ticks()
-        if current_time - last_spawn_time >= ENEMY_SPAWN_INTERVAL:
-            spawn_enemy()
-            last_spawn_time = current_time
+        if PLAYER_HEALTH <= 0:
+            game_over = True
+
+        if not game_over:
+            draw_quadrants(screen)
+            draw_shooting_cone(screen, player_angle)
+            draw_player(screen, player_angle)
+            draw_spawn_circle(screen)
+            update_enemies()
+            draw_enemies(screen)
+            display_imu_data(screen, player_angle, PLAYER_HEALTH, font)
+
+            current_time = pygame.time.get_ticks()
+            if current_time - last_spawn_time >= ENEMY_SPAWN_INTERVAL:
+                spawn_enemy()
+                last_spawn_time = current_time
+        else:
+            # Display Game Over
+            text = game_over_font.render("GAME OVER", True, (255, 0, 0))
+            text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 40))
+            screen.blit(text, text_rect)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            elif game_over and event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    running = False
             # elif event.type == pygame.KEYDOWN:
             #     if event.key == pygame.K_SPACE:
             #         shoot_sound.play()
@@ -230,11 +246,17 @@ def pygame_thread_fn():
         clock.tick(FPS)
 
     pygame.quit()
+    for src in enemy_sources:
+            src.stop()
 
 # --- ROS2 Node ---
 class ImuSubscriber(Node):
     def __init__(self):
         super().__init__('imu_subscriber')
+        self.motor_pub = self.create_publisher(Int32, '/motor', 10)
+
+        self.motor_timer = self.create_timer(0.1, self.check_aiming_cone)  # 10 Hz
+        
         self.subscription = self.create_subscription(
             Float32,               # Change this to Int32 if needed
             '/yaw_angle',
@@ -257,6 +279,30 @@ class ImuSubscriber(Node):
          if msg.data == 0:
             shoot_sound.play()
             shoot(player_angle)
+    
+    def check_aiming_cone(self):
+        global enemies, player_angle
+        enemy_in_cone = False
+
+        for enemy in enemies:
+            dx = enemy['x'] - CENTER[0]
+            dy = CENTER[1] - enemy['y']
+            enemy_angle = math.degrees(math.atan2(dy, dx))
+            if enemy_angle < 0:
+                enemy_angle += 360
+
+            diff = abs(enemy_angle - player_angle) % 360
+            if diff > 180:
+                diff = 360 - diff
+
+            if diff <= SHOT_ANGLE_RANGE:
+                enemy_in_cone = True
+                break
+
+        msg = Int32()
+        msg.data = 1 if enemy_in_cone else 0
+        self.motor_pub.publish(msg)
+
 
 # --- Main Execution ---
 def main(args=None):
@@ -296,4 +342,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-

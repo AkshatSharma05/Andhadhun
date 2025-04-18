@@ -33,7 +33,7 @@ void setup() {
   Serial.println("MPU6050 ready.");
 
   // Initialize micro-ROS transports
-set_microros_wifi_transports("akshat", "aryanaryan", "192.168.234.152", 8888);
+set_microros_transports();
 
   // Initialize the micro-ROS system
   allocator = rcl_get_default_allocator();
