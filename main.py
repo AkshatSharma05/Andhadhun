@@ -20,6 +20,9 @@ breathing_sound = pygame.mixer.Sound("breathing.wav")
 shoot_sound = pygame.mixer.Sound("gunshot.wav")
 breathing_sound.set_volume(0.3)  # Optional: adjust volume
 
+bite_sound = pygame.mixer.Sound("bite.wav")
+bite_sound.set_volume(0.5)  # Optional volume
+
 os.environ["ALSOFT_LOGLEVEL"] = "3"
 os.environ["ALSOFT_HRTF_MODE"] = "true"
 
@@ -35,6 +38,7 @@ last_spawn_time = 0
 WIDTH, HEIGHT = 800, 800
 CENTER = (WIDTH // 2, HEIGHT // 2)
 PLAYER_SIZE = 40
+PLAYER_HEALTH = 100
 ENEMY_SIZE = 50
 SHOT_ANGLE_RANGE = 6  # Degrees
 ENEMY_SPAWN_INTERVAL = 5000  # milliseconds
@@ -68,7 +72,12 @@ def spawn_enemy():
     y = CENTER[1] - distance * math.sin(rad)
 
     # Append enemy and create sound
-    enemies.append({'x': x, 'y': y, 'angle': angle})
+    enemies.append({
+    'x': x,
+    'y': y,
+    'angle': angle,
+    'last_bite_time': pygame.time.get_ticks()
+})
 
     # Create and configure OpenAL sound source
     source = oalOpen("zombie_mono.wav")
@@ -78,6 +87,30 @@ def spawn_enemy():
     source.set_position(((x - CENTER[0]) / 100, 0, (CENTER[1] - y) / 100))
     source.play()
     enemy_sources.append(source)
+
+def update_enemies():
+    global PLAYER_HEALTH
+    BITE_INTERVAL = 2000  # ms
+    STOP_DISTANCE = 60  # px
+    SPEED = 0.3  # pixels per frame
+
+    current_time = pygame.time.get_ticks()
+
+    for i, enemy in enumerate(enemies):
+        dx = CENTER[0] - enemy['x']
+        dy = CENTER[1] - enemy['y']
+        distance = math.hypot(dx, dy)
+
+        if distance > STOP_DISTANCE:
+            enemy['x'] += SPEED * dx / distance
+            enemy['y'] += SPEED * dy / distance
+            enemy_sources[i].set_position(((enemy['x'] - CENTER[0]) / 100, 0, (CENTER[1] - enemy['y']) / 100))
+        else:
+            # Close enough to bite
+            if current_time - enemy['last_bite_time'] >= BITE_INTERVAL:
+                bite_sound.play()
+                PLAYER_HEALTH -= 10
+                enemy['last_bite_time'] = current_time
 
 
 def draw_spawn_circle(screen):
@@ -111,9 +144,12 @@ def draw_shooting_cone(screen, angle):
         pygame.draw.line(screen, (255, 255, 0), CENTER, (end_x, end_y), 2)
 
 
-def display_imu_data(screen, angle, font):
+def display_imu_data(screen, angle, PLAYER_HEALTH, font):
     text = font.render(f"IMU Angle: {angle:.2f}°", True, (255, 255, 255))
     screen.blit(text, (20, 20))
+
+    textHealth = font.render(f"Health: {PLAYER_HEALTH}", True, (255, 255, 255))
+    screen.blit(textHealth, (60, 60))
 
 def shoot(angle):
     global enemies, enemy_sources
@@ -123,16 +159,23 @@ def shoot(angle):
     for i, enemy in enumerate(enemies):
         dx = enemy['x'] - CENTER[0]
         dy = CENTER[1] - enemy['y']  # Inverted y-axis
+        distance = math.hypot(dx, dy)
+
+        # Calculate enemy's angle relative to the player
         enemy_angle = math.degrees(math.atan2(dy, dx))
         if enemy_angle < 0:
             enemy_angle += 360
         diff = abs(enemy_angle - angle) % 360
         if diff > 180:
             diff = 360 - diff
-        if diff <= SHOT_ANGLE_RANGE:
-            print("Enemy hit at angle:", enemy_angle)
+
+        # Check if enemy is in the shooting cone or already close to player
+        if diff <= SHOT_ANGLE_RANGE or distance <= 60:
+            print("Enemy hit at angle:", enemy_angle, "Distance:", distance)
             enemy_sources[i].stop()
-            continue
+            continue  # Don't add back to list (despawned)
+        
+        # Otherwise, keep enemy
         new_enemies.append(enemy)
         new_sources.append(enemy_sources[i])
 
@@ -158,8 +201,9 @@ def pygame_thread_fn():
         draw_shooting_cone(screen, player_angle)
         draw_player(screen, player_angle)
         draw_spawn_circle(screen)
+        update_enemies()
         draw_enemies(screen)
-        display_imu_data(screen, player_angle, font)
+        display_imu_data(screen, player_angle, PLAYER_HEALTH, font)
 
         current_time = pygame.time.get_ticks()
         if current_time - last_spawn_time >= ENEMY_SPAWN_INTERVAL:
