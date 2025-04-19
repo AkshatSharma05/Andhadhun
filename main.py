@@ -17,25 +17,23 @@ from openal.al import alSourcei, AL_TRUE, AL_SOURCE_RELATIVE
 from std_msgs.msg import Float32, Int32
 
 pygame.mixer.init()
-breathing_sound = pygame.mixer.Sound("breathing.wav")
-shoot_sound = pygame.mixer.Sound("gunshot.wav")
+breathing_sound = pygame.mixer.Sound("sounds/breathing.wav")
+shoot_sound = pygame.mixer.Sound("sounds/gunshot.wav")
 breathing_sound.set_volume(0.3)  # Optional: adjust volume
 
-bite_sound = pygame.mixer.Sound("bite.wav")
+bite_sound = pygame.mixer.Sound("sounds/bite.wav")
 bite_sound.set_volume(0.5)  # Optional volume
 
 os.environ["ALSOFT_LOGLEVEL"] = "3"
 os.environ["ALSOFT_HRTF_MODE"] = "true"
 
-# Shared variables
 # angle_deg = 0
 player_angle = 0
 enemies = []
-enemy_sources = []  # OpenAL sources linked to each enemy
+enemy_sources = [] 
 running = True
 last_spawn_time = 0
 
-# Constants
 WIDTH, HEIGHT = 800, 800
 CENTER = (WIDTH // 2, HEIGHT // 2)
 PLAYER_SIZE = 40
@@ -48,12 +46,12 @@ FPS = 60
 def on_press(key):
     global player_angle, running
     try:
-        if key == keyboard.Key.left:
-            player_angle = (player_angle - 5) % 360
-        elif key == keyboard.Key.right:
-            player_angle = (player_angle + 5) % 360
-        elif key == keyboard.Key.esc:
-            running = False
+        # if key == keyboard.Key.left:
+        #     player_angle = (player_angle - 5) % 360
+        # elif key == keyboard.Key.right:
+        #     player_angle = (player_angle + 5) % 360
+        # elif key == keyboard.Key.esc:
+        #     running = False
         pass
     except:
         pass
@@ -82,9 +80,9 @@ def spawn_enemy():
 })
 
     # Create and configure OpenAL sound source
-    source = oalOpen("zombie_mono.wav")
+    source = oalOpen("sounds/zombie_mono.wav")
     source.set_looping(True)
-    source.set_gain(1.5)
+    source.set_gain(1.0)
     z = -5  # z-axis to simulate depth in audio
     source.set_position(((x - CENTER[0]) / 100, 0, (CENTER[1] - y) / 100))
     source.play()
@@ -171,13 +169,11 @@ def shoot(angle):
         if diff > 180:
             diff = 360 - diff
 
-        # Check if enemy is in the shooting cone or already close to player
-        if diff <= SHOT_ANGLE_RANGE or (diff <= 45):  # allow some leniency up close
+        if diff <= SHOT_ANGLE_RANGE or (diff <= 45):
             print("Enemy hit at angle:", enemy_angle, "Distance:", distance)
             enemy_sources[i].stop()
-            continue  # Don't add back to list (despawned)
+            continue 
         
-        # Otherwise, keep enemy
         new_enemies.append(enemy)
         new_sources.append(enemy_sources[i])
 
@@ -224,6 +220,9 @@ def pygame_thread_fn():
             text = game_over_font.render("GAME OVER", True, (255, 0, 0))
             text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 40))
             screen.blit(text, text_rect)
+            imu_subscriber.destroy_node()
+            rclpy.shutdown()
+            oalQuit()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -327,7 +326,7 @@ def main(args=None):
     # Orientation updater
     try:
         while running:
-            angle_rad = math.radians(player_angle)
+            angle_rad = math.radians(player_angle - 90)
             forward = (math.sin(angle_rad), 0, -math.cos(angle_rad))
             up = (0, 1, 0)
             listener.set_orientation(forward + up)
